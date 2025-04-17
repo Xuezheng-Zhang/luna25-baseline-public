@@ -20,20 +20,16 @@ fi
 
 echo "using NFS_USER_DIR=$NFS_USER_DIR and PROJECT_NAME=$PROJECT_NAME"
 
-# make a directory on the network-attached file system to store logs and checkpoints
-echo creating directory "$NFS_USER_DIR"
-mkdir -p "$NFS_USER_DIR"
-chmod 700 "$NFS_USER_DIR" # only you can access
 
-echo creating directory "$NFS_USER_DIR"/"$PROJECT_NAME"/data
-mkdir -p "$NFS_USER_DIR"/"$PROJECT_NAME"/data
+echo creating directory "$NFS_USER_DIR"/data
+mkdir -p "$NFS_USER_DIR"/data
 
-echo creating directory "$NFS_USER_DIR"/"$PROJECT_NAME"/logs
-mkdir -p "$NFS_USER_DIR"/"$PROJECT_NAME"/logs
+echo creating directory "$NFS_USER_DIR"/logs
+mkdir -p "$NFS_USER_DIR"/logs
 
 # and make a symlink to access it directly from the root of the project
-echo "creating symlink $PWD/data pointing to $NFS_USER_DIR/$PROJECT_NAME/data"
-ln -sfn "$NFS_USER_DIR"/"$PROJECT_NAME"/data "$SCRIPT_DIR"/../data
+echo "creating symlink $PWD/data pointing to $NFS_USER_DIR/data"
+ln -sfn "$NFS_USER_DIR"/data "$SCRIPT_DIR"/../data
 
-echo "creating symlink $PWD/logs pointing to $NFS_USER_DIR/$PROJECT_NAME/logs"
+echo "creating symlink $PWD/logs pointing to $NFS_USER_DIR/logs"
 ln -sfn "$NFS_USER_DIR"/"$PROJECT_NAME"/logs "$SCRIPT_DIR"/../logs
