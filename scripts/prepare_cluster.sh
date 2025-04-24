@@ -32,4 +32,4 @@ echo "creating symlink $PWD/data pointing to $NFS_USER_DIR/data"
 ln -sfn "$NFS_USER_DIR"/data "$SCRIPT_DIR"/../data
 
 echo "creating symlink $PWD/logs pointing to $NFS_USER_DIR/logs"
-ln -sfn "$NFS_USER_DIR"/"$PROJECT_NAME"/logs "$SCRIPT_DIR"/../logs
+ln -sfn "$NFS_USER_DIR"/logs "$SCRIPT_DIR"/../logs
