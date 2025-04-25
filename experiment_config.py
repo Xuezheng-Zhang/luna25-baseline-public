@@ -14,7 +14,7 @@ class Configuration(object):
         
         # Data parameters
         # Path to the nodule blocks folder provided for the LUNA25 training data. 
-        self.DATADIR = Path("../data/luna25_nodule_blocks")
+        self.DATADIR = Path("/vol/csedu-nobackup/course/IMC037_aimi/group13/data/luna25_nodule_blocks")
         # Path to the folder containing the CSVs for training and validation.
         self.CSV_DIR = Path("data")
         # We provide an NLST dataset CSV, but participants are responsible for splitting the data into training and validation sets.
