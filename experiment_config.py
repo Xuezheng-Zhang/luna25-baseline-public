@@ -31,7 +31,7 @@ class Configuration(object):
 
         # Training parameters
         self.SEED = 2025
-        self.NUM_WORKERS = 8
+        self.NUM_WORKERS = 2
         self.SIZE_MM = 50
         self.SIZE_PX = 64
         self.BATCH_SIZE = 32
