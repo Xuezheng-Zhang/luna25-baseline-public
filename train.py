@@ -79,10 +79,23 @@ def train(
     weights = torch.DoubleTensor(weights)
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(train_df))
 
-    train_loader = get_data_loader(
+    train_loader_2d = get_data_loader(
         config.DATADIR,
         train_df,
-        mode=config.MODE,
+        mode="2D",
+        sampler=sampler,
+        workers=config.NUM_WORKERS,
+        batch_size=config.BATCH_SIZE,
+        rotations=config.ROTATION,
+        translations=config.TRANSLATION,
+        size_mm=config.SIZE_MM,
+        size_px=config.SIZE_PX,
+    )
+    
+    train_loader_3d = get_data_loader(
+        config.DATADIR,
+        train_df,
+        mode="3D",
         sampler=sampler,
         workers=config.NUM_WORKERS,
         batch_size=config.BATCH_SIZE,
@@ -92,10 +105,22 @@ def train(
         size_px=config.SIZE_PX,
     )
 
-    valid_loader = get_data_loader(
+    valid_loader_2d = get_data_loader(
         config.DATADIR,
         valid_df,
-        mode=config.MODE,
+        mode="2D",
+        workers=config.NUM_WORKERS,
+        batch_size=config.BATCH_SIZE,
+        rotations=None,
+        translations=None,
+        size_mm=config.SIZE_MM,
+        size_px=config.SIZE_PX,
+    )
+    
+    valid_loader_3d = get_data_loader(
+        config.DATADIR,
+        valid_df,
+        mode="3D",
         workers=config.NUM_WORKERS,
         batch_size=config.BATCH_SIZE,
         rotations=None,
@@ -106,10 +131,8 @@ def train(
 
     device = torch.device("cuda:0")
 
-    if config.MODE == "2D":
-        model = ResNet18().to(device)
-    elif config.MODE == "3D":
-        model = I3D(
+    model_2d = ResNet18().to(device)
+    model_3d = I3D(
             num_classes=1,
             input_channels=3,
             pre_trained=True,
@@ -117,8 +140,14 @@ def train(
         ).to(device)
 
     loss_function = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(
-        model.parameters(),
+    optimizer_2d = torch.optim.Adam(
+        model_2d.parameters(),
+        lr=config.LEARNING_RATE,
+        weight_decay=config.WEIGHT_DECAY,
+    )
+    
+    optimizer_3d = torch.optim.Adam(
+        model_3d.parameters(),
         lr=config.LEARNING_RATE,
         weight_decay=config.WEIGHT_DECAY,
     )
@@ -141,26 +170,40 @@ def train(
 
         # train
 
-        model.train()
+        model_2d.train(); model_3d.train()
 
         epoch_loss = 0
         step = 0
 
-        for batch_data in tqdm(train_loader):
+        train_loader = zip(train_loader_2d, train_loader_3d)
+        num_batches = min(len(train_loader_2d), len(train_loader_3d))
+                
+        for batch_2d, batch_3d in tqdm(train_loader, total=num_batches):
             step += 1
-            inputs, labels = batch_data["image"], batch_data["label"]
+            inputs, labels = batch_2d["image"], batch_2d["label"]
             labels = labels.float().to(device)
             inputs = inputs.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = loss_function(outputs.squeeze(), labels.squeeze())
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.item()
-            epoch_len = len(train_df) // train_loader.batch_size
+            optimizer_2d.zero_grad()
+            outputs_2d = model_2d(inputs)
+            loss_2d = loss_function(outputs_2d.squeeze(), labels.squeeze())
+            loss_2d.backward()
+            optimizer_2d.step()
+            
+            inputs, labels = batch_3d["image"], batch_3d["label"]
+            labels = labels.float().to(device)
+            inputs = inputs.to(device)
+            optimizer_3d.zero_grad()
+            outputs_3d = model_3d(inputs)
+            loss_3d = loss_function(outputs_3d.squeeze(), labels.squeeze())
+            loss_3d.backward()
+            optimizer_3d.step()
+            
+            loss_combined = (loss_2d + loss_3d) / 2
+            epoch_loss += loss_combined.item()
+            epoch_len = num_batches
             if step % 100 == 0:
                 logging.info(
-                    "{}/{}, train_loss: {:.4f}".format(step, epoch_len, loss.item())
+                    "{}/{}, train_loss: {:.4f}".format(step, epoch_len, loss_combined.item())
                 )
         epoch_loss /= step
         logging.info(
@@ -169,30 +212,36 @@ def train(
 
         # validate
 
-        model.eval()
+        model_2d.eval(); model_3d.eval()
 
         epoch_loss = 0
         step = 0
+        
+        valid_loader = zip(valid_loader_2d, valid_loader_3d)
+        num_batches = min(len(valid_loader_2d), len(valid_loader_3d))
 
         with torch.no_grad():
 
             y_pred = torch.tensor([], dtype=torch.float32, device=device)
             y = torch.tensor([], dtype=torch.float32, device=device)
-            for val_data in valid_loader:
+            for val_data_2d, val_data_3d in valid_loader:
                 step += 1
-                val_images, val_labels = (
-                    val_data["image"].to(device),
-                    val_data["label"].to(device),
-                )
-                val_images = val_images.to(device)
-                val_labels = val_labels.float().to(device)
-                outputs = model(val_images)
-                loss = loss_function(outputs.squeeze(), val_labels.squeeze())
+                
+                val_images_2d = val_data_2d["image"].to(device)
+                val_labels = val_data_2d["label"].float().to(device)
+                outputs_2d = model_2d(val_images_2d).squeeze()
+                
+                val_images_3d = val_data_3d["image"].to(device)
+                outputs_3d = model_3d(val_images_3d).squeeze()
+                
+                ensemble_logits = (outputs_2d + outputs_3d) / 2
+                
+                loss = loss_function(ensemble_logits, val_labels.squeeze())
                 epoch_loss += loss.item()
-                y_pred = torch.cat([y_pred, outputs], dim=0)
+                y_pred = torch.cat([y_pred, ensemble_logits], dim=0)
                 y = torch.cat([y, val_labels], dim=0)
 
-                epoch_len = len(valid_df) // valid_loader.batch_size
+                epoch_len = num_batches
 
             epoch_loss /= step
             logging.info(
@@ -211,10 +260,8 @@ def train(
                 best_metric = auc_metric
                 best_metric_epoch = epoch + 1
 
-                torch.save(
-                    model.state_dict(),
-                    exp_save_root / "best_metric_model.pth",
-                )
+                torch.save(model_2d.state_dict(), exp_save_root / "best_model_2d.pth")
+                torch.save(model_3d.state_dict(), exp_save_root / "best_model_3d.pth")
 
                 metadata = {
                     "train_csv": train_csv_path,

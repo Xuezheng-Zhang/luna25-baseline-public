@@ -21,27 +21,29 @@ logging.basicConfig(
 # define processor
 class MalignancyProcessor:
     """
-    Loads a chest CT scan, and predicts the malignancy around a nodule
+    Loads a chest CT scan, and predicts the malignancy around a nodule using an ensemble of 2D and 3D models
     """
 
-    def __init__(self, mode="2D", suppress_logs=False, model_name="LUNA25-baseline-2D"):
-
+    def __init__(self, suppress_logs=False):
         self.size_px = 64
         self.size_mm = 50
-
-        self.model_name = model_name
-        self.mode = mode
         self.suppress_logs = suppress_logs
+        self.model_root = "/opt/app/resources"
 
         if not self.suppress_logs:
-            logging.info("Initializing the deep learning system")
+            logging.info("Initializing the ensemble system")
 
-        if self.mode == "2D":
-            self.model_2d = ResNet18(weights=None).cuda()
-        elif self.mode == "3D":
-            self.model_3d = I3D(num_classes=1, pre_trained=False, input_channels=3).cuda()
+        # Load 2D model
+        self.model_2d = ResNet18(weights=None).cuda()
+        ckpt_2d = torch.load(os.path.join(self.model_root, "best_model_2d.pth"))
+        self.model_2d.load_state_dict(ckpt_2d)
+        self.model_2d.eval()
 
-        self.model_root = "/opt/app/resources/"
+        # Load 3D model
+        self.model_3d = I3D(num_classes=1, pre_trained=False, input_channels=3).cuda()
+        ckpt_3d = torch.load(os.path.join(self.model_root, "best_model_3d.pth"))
+        self.model_3d.load_state_dict(ckpt_3d)
+        self.model_3d.eval()
 
     def define_inputs(self, image, header, coords):
         self.image = image
@@ -49,7 +51,6 @@ class MalignancyProcessor:
         self.coords = coords
 
     def extract_patch(self, coord, output_shape, mode):
-
         patch = dataloader.extract_patch(
             CTData=self.image,
             coord=coord,
@@ -66,53 +67,33 @@ class MalignancyProcessor:
             mode=mode,
         )
 
-        # ensure same datatype...
         patch = patch.astype(np.float32)
-
-        # clip and scale...
         patch = dataloader.clip_and_scale(patch)
         return patch
 
-    def _process_model(self, mode):
-
-        if not self.suppress_logs:
-            logging.info("Processing in " + mode)
-
-        if mode == "2D":
-            output_shape = [1, self.size_px, self.size_px]
-            model = self.model_2d
-        else:
-            output_shape = [self.size_px, self.size_px, self.size_px]
-            model = self.model_3d
-
-        nodules = []
+    def predict(self):
+        patches_2d = []
+        patches_3d = []
 
         for _coord in self.coords:
+            patches_2d.append(self.extract_patch(_coord, [1, self.size_px, self.size_px], mode="2D"))
+            patches_3d.append(self.extract_patch(_coord, [self.size_px]*3, mode="3D"))
 
-            patch = self.extract_patch(_coord, output_shape, mode=mode)
-            nodules.append(patch)
+        # Convert to tensors
+        patches_2d = torch.from_numpy(np.array(patches_2d)).cuda()
+        patches_3d = torch.from_numpy(np.array(patches_3d)).cuda()
 
-        nodules = np.array(nodules)
-        nodules = torch.from_numpy(nodules).cuda()
+        # Forward pass
+        with torch.no_grad():
+            logits_2d = self.model_2d(patches_2d).cpu().numpy()
+            logits_3d = self.model_3d(patches_3d).cpu().numpy()
 
-        ckpt = torch.load(
-            os.path.join(
-                self.model_root,
-                self.model_name,
-                "best_metric_model.pth",
-            )
-        )
-        model.load_state_dict(ckpt)
-        model.eval()
-        logits = model(nodules)
-        logits = logits.data.cpu().numpy()
+        # Apply sigmoid to get probabilities
+        probs_2d = torch.sigmoid(torch.from_numpy(logits_2d)).numpy()
+        probs_3d = torch.sigmoid(torch.from_numpy(logits_3d)).numpy()
 
-        logits = np.array(logits)
-        return logits
+        # Average predictions
+        probs_ensemble = (probs_2d + probs_3d) / 2.0
+        logits_ensemble = (logits_2d + logits_3d) / 2.0
 
-    def predict(self):
-
-        logits = self._process_model(self.mode)
-
-        probability = torch.sigmoid(torch.from_numpy(logits)).numpy()
-        return probability, logits
+        return probs_ensemble, logits_ensemble
