@@ -75,7 +75,7 @@ def itk_image_to_numpy_image(input_image):
 
 
 class NoduleProcessor:
-    def __init__(self, ct_image_file, nodule_locations, clinical_information, mode="2D", model_name="LUNA25-baseline-2D"):
+    def __init__(self, ct_image_file, nodule_locations, clinical_information):
         """
         Parameters
         ----------
@@ -88,8 +88,7 @@ class NoduleProcessor:
         self._image_file = ct_image_file
         self.nodule_locations = nodule_locations
         self.clinical_information =clinical_information
-        self.mode = mode
-        self.model_name = model_name
+
 
         self.processor = MalignancyProcessor(suppress_logs=True)
 
@@ -168,7 +167,7 @@ class NoduleProcessor:
         return results
 
 
-def run(mode="2D", model_name="LUNA25-baseline-2D"):
+def run():
     # Read the inputs
     input_nodule_locations = load_json_file(
         location=INPUT_PATH / "nodule-locations.json",
@@ -189,9 +188,7 @@ def run(mode="2D", model_name="LUNA25-baseline-2D"):
     # Run your algorithm here
     processor = NoduleProcessor(ct_image_file=input_chest_ct,
                                 nodule_locations=input_nodule_locations,
-                                clinical_information=input_clinical_information,
-                                mode=mode,
-                                model_name=model_name)
+                                clinical_information=input_clinical_information)
     malignancy_risks = processor.process()
 
     # Save your output
@@ -250,7 +247,4 @@ def _show_torch_cuda_info():
 
 
 if __name__ == "__main__":
-    mode = "2D"
-    model_name = "LUNA25-baseline-2D-20250225"
-    raise SystemExit(run(mode= mode,
-                         model_name=model_name))
+    raise SystemExit(run())
