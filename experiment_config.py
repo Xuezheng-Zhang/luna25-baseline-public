@@ -5,7 +5,7 @@ class Configuration(object):
     def __init__(self) -> None:
 
         # Working directory
-        self.WORKDIR = Path("C:/temp/luna25-baseline")
+        self.WORKDIR = Path(".")
         self.RESOURCES = self.WORKDIR / "resources"
         # Starting weights for the I3D model
         self.MODEL_RGB_I3D = (
@@ -37,7 +37,7 @@ class Configuration(object):
         self.BATCH_SIZE = 32
         self.ROTATION = ((-20, 20), (-20, 20), (-20, 20))
         self.TRANSLATION = True
-        self.EPOCHS = 10
+        self.EPOCHS = 1
         self.PATIENCE = 20
         self.PATCH_SIZE = [64, 128, 128]
         self.LEARNING_RATE = 1e-4
