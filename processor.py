@@ -24,22 +24,20 @@ class MalignancyProcessor:
     Loads a chest CT scan, and predicts the malignancy around a nodule
     """
 
-    def __init__(self, mode="2D", suppress_logs=False, model_name="LUNA25-baseline-2D"):
+    def __init__(self, suppress_logs=False, model_name="LUNA25-ensemble"):
 
         self.size_px = 64
         self.size_mm = 50
 
         self.model_name = model_name
-        self.mode = mode
         self.suppress_logs = suppress_logs
 
         if not self.suppress_logs:
             logging.info("Initializing the deep learning system")
 
-        if self.mode == "2D":
-            self.model_2d = ResNet18(weights=None).cuda()
-        elif self.mode == "3D":
-            self.model_3d = I3D(num_classes=1, pre_trained=False, input_channels=3).cuda()
+        self.model_2d = ResNet18(weights=None).cuda()
+        
+        self.model_3d = I3D(num_classes=1, pre_trained=False, input_channels=3).cuda()
 
         self.model_root = "/opt/app/resources/"
 
@@ -99,7 +97,7 @@ class MalignancyProcessor:
             os.path.join(
                 self.model_root,
                 self.model_name,
-                "best_metric_model.pth",
+                f"{mode}_best_metric_model.pth",
             )
         )
         model.load_state_dict(ckpt)
@@ -112,7 +110,10 @@ class MalignancyProcessor:
 
     def predict(self):
 
-        logits = self._process_model(self.mode)
+        logits_2d = self._process_model("2D")
+        logits_3d = self._process_model("3D")
+        
+        logits = (logits_2d + logits_3d) / 2.0
 
         probability = torch.sigmoid(torch.from_numpy(logits)).numpy()
         return probability, logits
