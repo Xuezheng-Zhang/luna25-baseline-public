@@ -168,7 +168,7 @@ class NoduleProcessor:
         return results
 
 
-def run(mode="2D", model_name="LUNA25-baseline-2D"):
+def run(model_name="LUNA25-baseline-2D"):
     # Read the inputs
     input_nodule_locations = load_json_file(
         location=INPUT_PATH / "nodule-locations.json",
@@ -190,7 +190,6 @@ def run(mode="2D", model_name="LUNA25-baseline-2D"):
     processor = NoduleProcessor(ct_image_file=input_chest_ct,
                                 nodule_locations=input_nodule_locations,
                                 clinical_information=input_clinical_information,
-                                mode=mode,
                                 model_name=model_name)
     malignancy_risks = processor.process()
 
@@ -250,7 +249,5 @@ def _show_torch_cuda_info():
 
 
 if __name__ == "__main__":
-    mode = "2D"
-    model_name = "LUNA25-baseline-2D-20250225"
-    raise SystemExit(run(mode= mode,
-                         model_name=model_name))
+    model_name = "LUNA25-ensemble"
+    raise SystemExit(run(model_name=model_name))
