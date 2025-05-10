@@ -91,7 +91,7 @@ class NoduleProcessor:
         self.mode = mode
         self.model_name = model_name
 
-        self.processor = MalignancyProcessor(mode=mode, suppress_logs=True, model_name=model_name)
+        self.processor = MalignancyProcessor(suppress_logs=True, model_name=model_name)
 
 
     def predict(self, input_image: SimpleITK.Image, coords: np.array) -> Dict:
