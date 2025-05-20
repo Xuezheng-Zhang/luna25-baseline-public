@@ -1,6 +1,7 @@
 """
 Script for training a ResNet18 or I3D to classify a pulmonary nodule as benign or malignant.
 """
+from models.timm_model import TIMMPretrainedModel
 from models.model_2d import ResNet18
 from models.model_3d import I3D
 from dataloader import get_data_loader
@@ -107,7 +108,7 @@ def train(
     device = torch.device("cuda:0")
 
     if config.MODE == "2D":
-        model = ResNet18().to(device)
+        model = TIMMPretrainedModel(config).to(device)
     elif config.MODE == "3D":
         model = I3D(
             num_classes=1,
@@ -247,7 +248,7 @@ def train(
 if __name__ == "__main__":
 
 
-    experiment_name = f"{config.EXPERIMENT_NAME}-{config.MODE}-{datetime.today().strftime('%Y%m%d')}"
+    experiment_name = f"{config.EXPERIMENT_NAME}-{config.MODEL_NAME}-{datetime.today().strftime('%Y%m%d')}"
 
     exp_save_root = config.EXPERIMENT_DIR / experiment_name
     exp_save_root.mkdir(parents=True, exist_ok=True)
