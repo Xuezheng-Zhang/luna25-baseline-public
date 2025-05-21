@@ -130,6 +130,10 @@ def train(
     epochs = config.EPOCHS
     patience = config.PATIENCE
     counter = 0
+    
+    train_losses = []
+    valid_losses = []
+    auc_scores = []
 
     for epoch in range(epochs):
 
@@ -167,6 +171,8 @@ def train(
         logging.info(
             "epoch {} average train loss: {:.4f}".format(epoch + 1, epoch_loss)
         )
+        
+        train_losses.append(epoch_loss)
 
         # validate
 
@@ -200,11 +206,15 @@ def train(
                 "epoch {} average valid loss: {:.4f}".format(epoch + 1, epoch_loss)
             )
 
+            valid_losses.append(epoch_loss)
+
             y_pred = torch.sigmoid(y_pred.reshape(-1)).data.cpu().numpy().reshape(-1)
             y = y.data.cpu().numpy().reshape(-1)
 
             fpr, tpr, _ = metrics.roc_curve(y, y_pred)
             auc_metric = metrics.auc(fpr, tpr)
+            
+            auc_scores.append(auc_metric)
 
             if auc_metric > best_metric:
 
@@ -243,6 +253,14 @@ def train(
             best_metric, best_metric_epoch
         )
     )
+    
+    metrics_df = pandas.DataFrame({
+        "epoch": list(range(1, len(train_losses) + 1)),
+        "train_loss": train_losses,
+        "valid_loss": valid_losses,
+        "auc": auc_scores,
+    })
+    metrics_df.to_csv(exp_save_root / "metrics.csv", index=False)
 
 
 if __name__ == "__main__":
