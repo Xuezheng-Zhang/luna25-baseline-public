@@ -12,6 +12,10 @@ import os
 import math
 import logging
 
+from models.timm_model import TIMMPretrainedModel
+from experiment_config import Configuration
+
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="[%(levelname)s][%(asctime)s] %(message)s",
@@ -35,9 +39,21 @@ class MalignancyProcessor:
         if not self.suppress_logs:
             logging.info("Initializing the deep learning system")
 
-        self.model_2d = ResNet18(weights=None).cuda()
+        # self.model_2d = ResNet18(weights=None).cuda()
         
-        self.model_3d = I3D(num_classes=1, pre_trained=False, input_channels=3).cuda()
+        # self.model_3d = I3D(num_classes=1, pre_trained=False, input_channels=3).cuda()
+
+        cfg_eff = Configuration()
+        cfg_eff.MODEL_NAME = "efficientnet_b0"
+        cfg_eff.PRETRAINED = False
+
+        cfg_vit = Configuration()
+        cfg_vit.MODEL_NAME = "vit_base_patch16_224"
+        cfg_vit.PRETRAINED = False
+
+        self.model_eff = TIMMPretrainedModel(cfg_eff)
+        self.model_vit = TIMMPretrainedModel(cfg_vit)
+
 
         self.model_root = "/opt/app/resources/"
 
@@ -71,17 +87,15 @@ class MalignancyProcessor:
         patch = dataloader.clip_and_scale(patch)
         return patch
 
-    def _process_model(self, mode):
+    def _process_model(self, mode, name, model):
 
         if not self.suppress_logs:
             logging.info("Processing in " + mode)
 
         if mode == "2D":
             output_shape = [1, self.size_px, self.size_px]
-            model = self.model_2d
         else:
             output_shape = [self.size_px, self.size_px, self.size_px]
-            model = self.model_3d
 
         nodules = []
 
@@ -97,10 +111,11 @@ class MalignancyProcessor:
             os.path.join(
                 self.model_root,
                 self.model_name,
-                f"{mode}_best_metric_model.pth",
+                f"{name}_best_metric_model.pth",
             )
         )
         model.load_state_dict(ckpt)
+        model = model.cuda()
         model.eval()
         logits = model(nodules)
         logits = logits.data.cpu().numpy()
@@ -110,10 +125,10 @@ class MalignancyProcessor:
 
     def predict(self):
 
-        logits_2d = self._process_model("2D")
-        logits_3d = self._process_model("3D")
-        
-        logits = (logits_2d + logits_3d) / 2.0
+        logits_efi = self._process_model("2D", "EfficientNet", self.model_eff)
+        logits_vit = self._process_model("2D", "ViT", self.model_vit)
+
+        logits = (logits_efi + logits_vit) / 2.0
 
         probability = torch.sigmoid(torch.from_numpy(logits)).numpy()
         return probability, logits
